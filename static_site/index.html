@@ -131,6 +131,10 @@
             <button class="btn" onclick="saveApi()">Save</button>
           </div>
           <div class="row inputs">
+            <input id="wallet" type="text" placeholder="Your Bitcoin address (for PSBT)" />
+            <button class="btn" onclick="saveWallet()">Save Wallet</button>
+          </div>
+          <div class="row inputs">
             <input id="feerate" type="number" min="1" max="200" step="1" placeholder="Fee rate (sat/vB)" />
             <button class="btn" onclick="saveFee()">Set Fee</button>
           </div>
@@ -209,7 +213,7 @@
           const pngB64 = document.getElementById('c').toDataURL('image/png').split(',')[1];
           const traits = resolveTraits(tx);
           const metadata = { source_txid: traits.source_txid, description: 'Pixel sheep variant with controlled wool and pose.', traits };
-          const res = await fetch(api.replace(/\/$/, '') + '/psbt', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ image_base64: pngB64, metadata, fee_rate_sat_vb: feeRate() })});
+          const res = await fetch(api.replace(/\/$/, '') + '/psbt', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ image_base64: pngB64, metadata, fee_rate_sat_vb: feeRate(), source_wallet: walletAddr() })});
           const data = await res.json(); if(data.error) throw new Error(data.error);
           if (data.session) { window.__hf_session = data.session; }
           const psbt = data.psbt || data.PSBT || data.data || JSON.stringify(data);
@@ -451,6 +455,8 @@
         }
         const f = localStorage.getItem('hexaflock_fee');
         document.getElementById('feerate').value = f ? Number(f) : 10;
+        const w = localStorage.getItem('hexaflock_wallet');
+        if (w) document.getElementById('wallet').value = w;
         refreshSupply();
         // Fetch backend config to set network for explorer links
         const api = apiUrl();
@@ -465,6 +471,8 @@
       function saveApi(){ localStorage.setItem('hexaflock_api', apiUrl()); alert('Saved'); refreshSupply(); }
       function feeRate(){ const v = Number(document.getElementById('feerate').value||0); return Math.max(1, Math.min(1000, Math.floor(v||10))); }
       function saveFee(){ const v = feeRate(); localStorage.setItem('hexaflock_fee', String(v)); alert('Fee set to '+v+' sat/vB'); }
+      function walletAddr(){ return (document.getElementById('wallet').value||'').trim(); }
+      function saveWallet(){ const w = walletAddr(); if(!w){ alert('Enter an address'); return; } localStorage.setItem('hexaflock_wallet', w); alert('Wallet saved'); }
       async function refreshSupply(){
         const el = document.getElementById('supplyBadge');
         const api = apiUrl();
