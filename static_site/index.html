@@ -127,7 +127,7 @@
         <div class="card">
           <div class="panel-label">Stamp (Optional Backend)</div>
           <div class="row inputs">
-            <input id="api" type="text" placeholder="Backend API URL (e.g., https://your-backend.example.com)" />
+            <input id="api" type="text" placeholder="Backend API URL (e.g., https://your-backend.example.com)" value="https://hexaflock-worker.mrarwyn.workers.dev" />
             <button class="btn" onclick="saveApi()">Save</button>
           </div>
           <div class="toolbar">
@@ -152,6 +152,8 @@
     <div class="scanlines" id="scan"></div>
 
     <script>
+      // Default backend API (workers.dev)
+      const DEFAULT_API = 'https://hexaflock-worker.mrarwyn.workers.dev';
       // Palette and masks (inline, minimal dependencies)
       const PALETTE = [
         '#000000','#FFFFFF','#F0F0F0','#D3D3D3','#FF8C00','#FFA500','#FF4500','#DC143C','#FF0000','#32CD32','#00FF00','#6B4E3D','#808080'
@@ -397,7 +399,13 @@
         const q = params.get('txid');
         if(q){ document.getElementById('txid').value = q; generate(); }
         const a = localStorage.getItem('hexaflock_api');
-        if(a) document.getElementById('api').value = a;
+        if(a){
+          document.getElementById('api').value = a;
+        } else {
+          // Prefill with default and persist so refreshSupply works immediately
+          document.getElementById('api').value = DEFAULT_API;
+          localStorage.setItem('hexaflock_api', DEFAULT_API);
+        }
         refreshSupply();
       })();
 
