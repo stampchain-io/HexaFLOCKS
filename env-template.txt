@@ -14,8 +14,8 @@ GITHUB_USERNAME=stampchain-io
 
 # -------- Domain Configuration --------
 # Your custom domain for GitHub Pages
-CUSTOM_DOMAIN=www.hexaflock.com
-ROOT_DOMAIN=hexaflock.com
+CUSTOM_DOMAIN=www.hexaflocks.com
+ROOT_DOMAIN=hexaflocks.com
 
 # -------- Bitcoin Network Configuration --------
 # Choose: mainnet or testnet
@@ -57,7 +57,7 @@ CREATOR_TIP_SATS=21000
 
 # -------- CORS Settings --------
 # Allowed origins for API access (comma-separated)
-ALLOWED_ORIGINS=https://stampchain-io.github.io,https://www.hexaflock.com,https://hexaflock.com
+ALLOWED_ORIGINS=https://stampchain-io.github.io,https://www.hexaflocks.com,https://hexaflocks.com
 
 # ===========================================
 # INSTRUCTIONS
