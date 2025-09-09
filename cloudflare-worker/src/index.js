@@ -1,8 +1,15 @@
-function corsHeaders(env) {
-  const origin = env.ALLOWED_ORIGIN || "*";
+function corsHeaders(env, req) {
+  const allow = (env.ALLOWED_ORIGIN || "*").trim();
+  let originHeader = "*";
+  if (allow !== "*") {
+    const reqOrigin = req?.headers?.get?.("Origin") || "";
+    const allowed = allow.split(/[,\s]+/).filter(Boolean);
+    if (allowed.includes(reqOrigin)) originHeader = reqOrigin;
+    else originHeader = "null";
+  }
   return {
     "content-type": "application/json",
-    "access-control-allow-origin": origin,
+    "access-control-allow-origin": originHeader,
     "access-control-allow-methods": "GET,POST,OPTIONS",
     "access-control-allow-headers": "*",
   };
@@ -100,7 +107,7 @@ export default {
     const pathname = url.pathname.replace(/\/$/, "");
 
     if (request.method === "OPTIONS") {
-      return new Response(null, { headers: corsHeaders(env) });
+      return new Response(null, { headers: corsHeaders(env, request) });
     }
 
     if (pathname === "" || pathname === "/") {
@@ -110,7 +117,7 @@ export default {
           ok: true,
           endpoints: ["/health", "/config", "/supply", "/psbt", "/mint", "/broadcast", "/fee_estimate"],
         }),
-        { headers: corsHeaders(env) }
+        { headers: corsHeaders(env, request) }
       );
     }
 
@@ -127,7 +134,7 @@ export default {
         }
       } catch (_) {}
       return new Response(JSON.stringify({ ok: true, kv: kvOk, upstream: upstreamOk }), {
-        headers: corsHeaders(env),
+        headers: corsHeaders(env, request),
       });
     }
 
@@ -138,7 +145,7 @@ export default {
           tx_builder_url: env.TX_BUILDER_URL || null,
           max_flocks: parseInt(env.MAX_FLOCKS || "10000", 10),
         }),
-        { headers: corsHeaders(env) }
+        { headers: corsHeaders(env, request) }
       );
     }
 
@@ -147,12 +154,12 @@ export default {
         const s = await getSupply(env);
         return new Response(
           JSON.stringify(s),
-          { headers: corsHeaders(env) }
+          { headers: corsHeaders(env, request) }
         );
       } catch (e) {
         return new Response(
           JSON.stringify({ error: "failed_to_read_supply", message: String(e) }),
-          { status: 500, headers: corsHeaders(env) }
+          { status: 500, headers: corsHeaders(env, request) }
         );
       }
     }
@@ -174,9 +181,9 @@ export default {
         };
         const data = await proxyBuilder(env, env.TX_BUILDER_PSBT_PATH || "/api/psbt", payload);
         const session = await createSession(env);
-        return new Response(JSON.stringify({ ...data, session }), { headers: corsHeaders(env) });
+        return new Response(JSON.stringify({ ...data, session }), { headers: corsHeaders(env, request) });
       } catch (e) {
-        return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 500, headers: corsHeaders(env) });
+        return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 500, headers: corsHeaders(env, request) });
       }
     }
 
@@ -190,9 +197,9 @@ export default {
         if (okSession) {
           await incrementIfNotSeen(env, txid);
         }
-        return new Response(JSON.stringify(data), { headers: corsHeaders(env) });
+        return new Response(JSON.stringify(data), { headers: corsHeaders(env, request) });
       } catch (e) {
-        return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 500, headers: corsHeaders(env) });
+        return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 500, headers: corsHeaders(env, request) });
       }
     }
 
@@ -214,9 +221,9 @@ export default {
         };
         const data = await proxyBuilder(env, env.TX_BUILDER_PSBT_PATH || "/api/psbt", payload);
         const session = await createSession(env);
-        return new Response(JSON.stringify({ psbt: data.psbt || data.PSBT || data, session }), { headers: corsHeaders(env) });
+        return new Response(JSON.stringify({ psbt: data.psbt || data.PSBT || data, session }), { headers: corsHeaders(env, request) });
       } catch (e) {
-        return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 500, headers: corsHeaders(env) });
+        return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 500, headers: corsHeaders(env, request) });
       }
     }
 
@@ -237,19 +244,19 @@ export default {
           };
           const data = await proxyBuilder(env, env.TX_BUILDER_PSBT_PATH || "/api/psbt", payload);
           if (typeof data.estimated_sats === "number") {
-            return new Response(JSON.stringify({ estimated_sats: data.estimated_sats }), { headers: corsHeaders(env) });
+            return new Response(JSON.stringify({ estimated_sats: data.estimated_sats }), { headers: corsHeaders(env, request) });
           }
         } catch (_) {}
 
         // Fallback naive estimate
         const feeRate = Number(body.fee_rate_sat_vb || env.FEE_RATE_SAT_VB || "5");
         const vbytes = 2500; // heuristic placeholder
-        return new Response(JSON.stringify({ estimated_sats: Math.round(feeRate * vbytes) }), { headers: corsHeaders(env) });
+        return new Response(JSON.stringify({ estimated_sats: Math.round(feeRate * vbytes) }), { headers: corsHeaders(env, request) });
       } catch (e) {
-        return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 500, headers: corsHeaders(env) });
+        return new Response(JSON.stringify({ error: String(e.message || e) }), { status: 500, headers: corsHeaders(env, request) });
       }
     }
 
-    return new Response("Not found", { status: 404, headers: corsHeaders(env) });
+    return new Response("Not found", { status: 404, headers: corsHeaders(env, request) });
   },
 };

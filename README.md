@@ -98,7 +98,7 @@ curl https://<worker>.workers.dev/supply
 Notes & Limitations
 - No custodial signing. The Worker never holds keys. Users must sign PSBTs in their wallet.
 - Supply counter is best‑effort (KV is eventually consistent). For strict accounting or concurrent mints, consider a Durable Object.
-- CORS defaults to `*`. Set `ALLOWED_ORIGIN` in `wrangler.toml` to lock it to your site domain.
+ - CORS defaults to `*`. Set `ALLOWED_ORIGIN` in `wrangler.toml` to lock it to your site domain. Supports comma‑separated list of origins.
 - If the upstream builder schema differs, adjust `TX_BUILDER_*` paths or payload fields in `cloudflare-worker/src/index.js`.
 
 Color Derivation (Front‑end)
