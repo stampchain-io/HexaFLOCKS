@@ -1,0 +1,75 @@
+# ===========================================
+# HexaFlock Configuration
+# ===========================================
+
+# -------- Cloudflare API Configuration --------
+# Get your API token from: https://dash.cloudflare.com/profile/api-tokens
+# Required permissions: Zone:Read, DNS:Edit, Account:Read
+CLOUDFLARE_API_TOKEN=your_cloudflare_api_token_here
+
+# -------- GitHub Configuration --------
+# Your GitHub repository for GitHub Pages deployment
+GITHUB_REPO=stampchain-io/HexaFLOCKS
+GITHUB_USERNAME=stampchain-io
+
+# -------- Domain Configuration --------
+# Your custom domain for GitHub Pages
+CUSTOM_DOMAIN=www.hexaflock.com
+ROOT_DOMAIN=hexaflock.com
+
+# -------- Bitcoin Network Configuration --------
+# Choose: mainnet or testnet
+BITCOIN_NETWORK=mainnet
+
+# -------- Wallet Configuration --------
+# OPTIONAL: Your Bitcoin wallet private key (only needed for local stamping)
+# Leave blank if you only want to generate/view sheep online
+# WALLET_PRIVATE_KEY=your_wallet_private_key_here
+
+# -------- API Endpoints --------
+# Backend API URL for stamp functionality (your Cloudflare Worker)
+BACKEND_API_URL=https://hexaflock-worker.stampchain-io.workers.dev
+
+# Backend service for Bitcoin stamping (private - not for public use)
+STAMP_BACKEND_URL=https://stampchain.io
+
+# -------- Development Settings --------
+# Enable mock stamps for testing
+ALLOW_MOCK_STAMP=false
+
+# -------- IPFS Configuration --------
+# Enable IPFS for decentralized storage
+USE_IPFS=false
+IPFS_NODE=http://127.0.0.1:5001
+
+# -------- Logging --------
+# Log level: DEBUG, INFO, WARNING, ERROR
+LOG_LEVEL=INFO
+
+# -------- Stamp Configuration --------
+# Maximum number of flocks allowed
+MAX_FLOCKS=10000
+
+# -------- Creator Settings --------
+# Your Bitcoin address for receiving tips
+CREATOR_ADDRESS=bc1qzzxln49x202l7m3289gs5e4q5th4tdt406w8ka
+CREATOR_TIP_SATS=21000
+
+# -------- CORS Settings --------
+# Allowed origins for API access (comma-separated)
+ALLOWED_ORIGINS=https://stampchain-io.github.io,https://www.hexaflock.com,https://hexaflock.com
+
+# ===========================================
+# INSTRUCTIONS
+# ===========================================
+#
+# 1. Copy this file to .env:
+#    cp env-template.txt .env
+#
+# 2. Fill in your actual values (especially CLOUDFLARE_API_TOKEN)
+#
+# 3. NEVER commit .env to git (it's in .gitignore)
+#
+# 4. Keep your private keys and API tokens SECURE!
+#
+# ===========================================

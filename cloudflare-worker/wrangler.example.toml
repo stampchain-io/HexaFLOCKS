@@ -10,7 +10,7 @@ id = "<your-kv-namespace-id>"
 
 [vars]
 BITCOIN_NETWORK = "testnet"
-TX_BUILDER_URL = "https://dev.bitcoinstamps.xyz"
+TX_BUILDER_URL = "https://your-stamp-service.com"
 TX_BUILDER_PSBT_PATH = "/api/psbt"
 TX_BUILDER_BROADCAST_PATH = "/api/broadcast"
 FEE_RATE_SAT_VB = "5"
