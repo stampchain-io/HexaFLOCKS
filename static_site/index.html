@@ -123,6 +123,18 @@
           <div class="panel-label">Traits</div>
           <div id="meta" class="row"></div>
         </div>
+        <div class="card">
+          <div class="panel-label">Stamp (Optional Backend)</div>
+          <div class="row inputs">
+            <input id="api" type="text" placeholder="Backend API URL (e.g., https://your-backend.example.com)" />
+            <button class="btn" onclick="saveApi()">Save</button>
+          </div>
+          <div class="toolbar">
+            <button class="btn-secondary btn" onclick="estimateFee()">Estimate Fee</button>
+            <button class="btn" onclick="stampNow()">Stamp on Bitcoin</button>
+          </div>
+          <div class="row" id="mintStatus" style="min-height:1.2em;color:#9ca3af"></div>
+        </div>
       </div>
     </div>
     <div class="scanlines" id="scan"></div>
@@ -132,12 +144,35 @@
       const PALETTE = [
         '#000000','#FFFFFF','#F0F0F0','#D3D3D3','#FF8C00','#FFA500','#FF4500','#DC143C','#FF0000','#32CD32','#00FF00','#6B4E3D','#808080'
       ];
+      // Masks tuned to match the reference silhouette more closely
       const MASKS = {
         grid: 24,
-        head: [[2,10],[3,10],[4,10],[5,10],[2,11],[3,11],[4,11],[5,11],[2,12],[3,12],[4,12],[5,12],[2,13],[3,13],[4,13]],
-        eyes: { left:[3,11], right:[5,11] },
-        snout: [6,12], legs: [[9,16],[14,16]],
-        wool_seeds: [[8,10],[9,10],[10,10],[11,10],[12,10],[8,11],[9,11],[10,11],[11,11],[12,11],[13,11],[8,12],[9,12],[10,12],[11,12],[12,12],[13,12],[14,12],[9,13],[10,13],[11,13],[12,13],[13,13],[10,14],[11,14],[12,14]]
+        // Compact orange head on the left
+        head: [
+          [2,9],[3,9],[4,9],[5,9],
+          [2,10],[3,10],[4,10],[5,10],
+          [2,11],[3,11],[4,11],[5,11],
+          [2,12],[3,12],[4,12],[5,12],
+          [3,13],[4,13]
+        ],
+        eyes: { left:[3,10], right:[5,10] },
+        snout: [6,12],
+        // Legs under body, slightly staggered
+        legs: [[10,17],[15,17]],
+        // Wool base cluster shaped as a two-lobed wing to the right
+        wool_fill: (()=>{
+          const pts=[];
+          // Upper lobe
+          for(let x=8;x<=17;x++) pts.push([x,9]);
+          for(let x=8;x<=18;x++) pts.push([x,10]);
+          for(let x=9;x<=19;x++) pts.push([x,11]);
+          for(let x=9;x<=19;x++) pts.push([x,12]);
+          // Lower lobe taper
+          for(let x=10;x<=18;x++) pts.push([x,13]);
+          for(let x=11;x<=17;x++) pts.push([x,14]);
+          for(let x=12;x<=16;x++) pts.push([x,15]);
+          return pts;
+        })()
       };
 
       // TXID -> seed (match backend logic)
@@ -201,29 +236,31 @@
           const nx=Math.max(0,Math.min(g-1,x+dx)); p(nx,y,'#6B4E3D');
         });
 
-        // Wool growth
+        // Wool strict outline: start from fixed fill, then apply minor edge jitter for texture only
         const r = mulberry32(txidToSeed(traits.source_txid));
-        const neighHex=[[1,0],[0,1],[-1,1],[-1,0],[0,-1],[1,-1]];
-        const neighBlock=[[1,0],[-1,0],[0,1],[0,-1]];
-        const neigh = traits.wool_shape==='hex'?neighHex:neighBlock;
         const headSet = new Set(MASKS.head.map(([x,y])=>`${x},${y}`));
-        let wool = new Set(MASKS.wool_seeds.map(([x,y])=>`${x},${y}`));
-        for(let i=0;i<traits.wool_density;i++){
-          const add = new Set();
-          wool.forEach(key=>{
-            const [x,y]=key.split(',').map(Number);
-            neigh.forEach(([dx,dy])=>{
-              const jx = dx + randInt(r,-traits.edge_jitter,traits.edge_jitter);
-              const jy = dy + randInt(r,-traits.edge_jitter,traits.edge_jitter);
-              const nx=x+jx, ny=y+jy;
-              if(nx>=0&&nx<g&&ny>=8&&ny<g-4){
-                const k=`${nx},${ny}`; if(!wool.has(k)&&!headSet.has(k)) add.add(k);
-              }
-            })
+        const base = new Set(MASKS.wool_fill.map(([x,y])=>`${x},${y}`));
+        const woolSet = new Set(base);
+        // Texture: sprinkle a few pixels near the back and edges
+        base.forEach(k=>{
+          const [x,y]=k.split(',').map(Number);
+          if(x>12 && Math.random()<0.12){
+            const nx=x+(Math.random()<0.5?1:-1), ny=y+(Math.random()<0.5?1:-1);
+            if(nx>=0&&nx<g&&ny>=0&&ny<g) woolSet.add(`${nx},${ny}`);
+          }
+        });
+        woolSet.forEach(k=>{const [x,y]=k.split(',').map(Number); p(x,y,'#FFFFFF')});
+        // Outline (1px dark edge where adjacent to background)
+        woolSet.forEach(k=>{
+          const [x,y]=k.split(',').map(Number);
+          const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+          dirs.forEach(([dx,dy])=>{
+            const nx=x+dx, ny=y+dy; const nk=`${nx},${ny}`;
+            if(nx>=0&&nx<g&&ny>=0&&ny<g && !woolSet.has(nk) && !headSet.has(nk)){
+              p(nx,ny,'#808080');
+            }
           });
-          add.forEach(k=>wool.add(k));
-        }
-        wool.forEach(k=>{const [x,y]=k.split(',').map(Number); p(x,y,'#FFFFFF')});
+        });
 
         // Accessories
         if(traits.accessory==='scarf'){
@@ -321,7 +358,36 @@
         const params = new URLSearchParams(window.location.search);
         const q = params.get('txid');
         if(q){ document.getElementById('txid').value = q; generate(); }
+        const a = localStorage.getItem('hexaflock_api');
+        if(a) document.getElementById('api').value = a;
       })();
+
+      function apiUrl(){ return (document.getElementById('api').value||'').trim(); }
+      function saveApi(){ localStorage.setItem('hexaflock_api', apiUrl()); alert('Saved'); }
+      async function estimateFee(){
+        const api = apiUrl(); if(!api) return alert('Set backend API URL first');
+        const tx = document.getElementById('txid').value.trim();
+        try{
+          const pngB64 = document.getElementById('c').toDataURL('image/png').split(',')[1];
+          const res = await fetch(api.replace(/\/$/, '') + '/fee_estimate', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image_base64: pngB64})});
+          const data = await res.json();
+          if(data.error) throw new Error(data.error);
+          document.getElementById('mintStatus').textContent = `Estimated fee: ${data.estimated_sats} sats`;
+        }catch(e){ document.getElementById('mintStatus').textContent = e.message; }
+      }
+      async function stampNow(){
+        const api = apiUrl(); if(!api) return alert('Set backend API URL first');
+        const tx = document.getElementById('txid').value.trim();
+        try{
+          const pngB64 = document.getElementById('c').toDataURL('image/png').split(',')[1];
+          const traits = resolveTraits(tx);
+          const metadata = { source_txid: traits.source_txid, description: 'Pixel sheep variant with controlled wool and pose.', traits };
+          const res = await fetch(api.replace(/\/$/, '') + '/mint', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ image_base64: pngB64, metadata })});
+          const data = await res.json();
+          if(data.error) throw new Error(data.error);
+          document.getElementById('mintStatus').innerHTML = `Stamped TX: <a target="_blank" href="https://mempool.space/tx/${data.tx_hash}">${data.tx_hash}</a>`;
+        }catch(e){ document.getElementById('mintStatus').textContent = e.message; }
+      }
     </script>
   </body>
   </html>
