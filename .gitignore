@@ -22,3 +22,6 @@ certificate.pdf
 # OS
 .DS_Store
 Thumbs.db
+
+# Cloudflare (contains sensitive account/namespace IDs)
+cloudflare-worker/wrangler.toml

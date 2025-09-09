@@ -130,6 +130,10 @@
             <input id="api" type="text" placeholder="Backend API URL (e.g., https://your-backend.example.com)" value="https://hexaflock-worker.mrarwyn.workers.dev" />
             <button class="btn" onclick="saveApi()">Save</button>
           </div>
+          <div class="row inputs">
+            <input id="feerate" type="number" min="1" max="200" step="1" placeholder="Fee rate (sat/vB)" />
+            <button class="btn" onclick="saveFee()">Set Fee</button>
+          </div>
           <div class="toolbar">
             <button class="btn-secondary btn" onclick="estimateFee()">Estimate Fee</button>
             <button class="btn" onclick="stampNow()">Stamp on Bitcoin</button>
@@ -205,8 +209,9 @@
           const pngB64 = document.getElementById('c').toDataURL('image/png').split(',')[1];
           const traits = resolveTraits(tx);
           const metadata = { source_txid: traits.source_txid, description: 'Pixel sheep variant with controlled wool and pose.', traits };
-          const res = await fetch(api.replace(/\/$/, '') + '/psbt', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ image_base64: pngB64, metadata })});
+          const res = await fetch(api.replace(/\/$/, '') + '/psbt', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ image_base64: pngB64, metadata, fee_rate_sat_vb: feeRate() })});
           const data = await res.json(); if(data.error) throw new Error(data.error);
+          if (data.session) { window.__hf_session = data.session; }
           const psbt = data.psbt || data.PSBT || data.data || JSON.stringify(data);
           const box = document.getElementById('psbtBox'); const out = document.getElementById('psbtOut');
           if(out){ out.value = psbt; box.style.display = 'block'; }
@@ -217,10 +222,12 @@
         const api = apiUrl(); if(!api) return alert('Set backend API URL first');
         const txh = (document.getElementById('txHex')?.value||'').trim(); if(!txh) return alert('Paste signed tx hex');
         try{
-          const res = await fetch(api.replace(/\/$/, '') + '/broadcast', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tx_hex: txh })});
+          const res = await fetch(api.replace(/\/$/, '') + '/broadcast', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ tx_hex: txh, session: window.__hf_session })});
           const data = await res.json(); if(data.error) throw new Error(data.error);
           const h = data.txid || data.tx_hash || JSON.stringify(data);
-          document.getElementById('mintStatus').innerHTML = `Broadcast TX: <a target=\"_blank\" href=\"https://mempool.space/tx/${h}\">${h}</a>`;
+          const explorer = (window.__hf_network === 'testnet') ? 'https://mempool.space/testnet' : 'https://mempool.space';
+          document.getElementById('mintStatus').innerHTML = `Broadcast TX: <a target=\\"_blank\\" href=\\"${explorer}/tx/${h}\\">${h}</a>`;
+          refreshSupply();
         }catch(e){ alert(e.message); }
       }
 
@@ -230,13 +237,49 @@
       function pick(r,arr){return arr[Math.floor(r()*arr.length)]}
       function pickWeighted(r,items,weights){const s=weights.reduce((a,b)=>a+b,0);let x=r()*s;for(let i=0;i<items.length;i++){if((x-=weights[i])<0)return items[i]}return items[items.length-1]}
 
+      // Color helpers: derive deterministic HSL from TXID slices and return hex
+      function hslToHex(h, s, l){
+        s = Math.max(0, Math.min(100, s)) / 100;
+        l = Math.max(0, Math.min(100, l)) / 100;
+        const c = (1 - Math.abs(2*l - 1)) * s;
+        const hh = (h % 360) / 60;
+        const x = c * (1 - Math.abs((hh % 2) - 1));
+        let r=0,g=0,b=0;
+        if (0 <= hh && hh < 1){ r=c; g=x; b=0; }
+        else if (1 <= hh && hh < 2){ r=x; g=c; b=0; }
+        else if (2 <= hh && hh < 3){ r=0; g=c; b=x; }
+        else if (3 <= hh && hh < 4){ r=0; g=x; b=c; }
+        else if (4 <= hh && hh < 5){ r=x; g=0; b=c; }
+        else { r=c; g=0; b=x; }
+        const m = l - c/2;
+        const R = Math.round((r+m)*255), G = Math.round((g+m)*255), B = Math.round((b+m)*255);
+        const toHex = (n)=> n.toString(16).padStart(2,'0');
+        return `#${toHex(R)}${toHex(G)}${toHex(B)}`;
+      }
+      function colorFromHash(txid, offset, sMin=50, sMax=95, lMin=35, lMax=70){
+        // Use 8 nibbles starting at offset: 4 for hue, 2 for sat, 2 for light
+        const hRaw = parseInt(txid.slice(offset, offset+4), 16);
+        const sRaw = parseInt(txid.slice(offset+4, offset+6), 16);
+        const lRaw = parseInt(txid.slice(offset+6, offset+8), 16);
+        const h = hRaw % 360;
+        const s = sMin + (sRaw % (sMax - sMin + 1));
+        const l = lMin + (lRaw % (lMax - lMin + 1));
+        return hslToHex(h, s, l);
+      }
+
       function resolveTraits(txid){
-        const seed = txidToSeed(txid); const r=mulberry32(seed);
+        const norm = (txid||'').trim().toLowerCase();
+        const seed = txidToSeed(norm); const r=mulberry32(seed);
+        // Colors derived directly from hash slices so they are fully deterministic
+        const body_color = colorFromHash(norm, 0, 55, 95, 35, 65);
+        const eye_color = colorFromHash(norm, 8, 65, 100, 55, 80);
+        const snout_color = colorFromHash(norm, 16, 50, 90, 30, 60);
         return {
-          source_txid: txid,
-          body_color: pick(r,['#FF8C00','#FFA500','#FF4500']),
-          eye_color: pick(r,['#00FF00','#32CD32']),
-          snout_color: pickWeighted(r,['#FF0000','#DC143C','#FFD700'],[89,10,1]),
+          source_txid: norm,
+          body_color,
+          eye_color,
+          snout_color,
+          // Non-color traits remain seeded but deterministic
           wool_density: randInt(r,3,7),
           wool_shape: pick(r,['hex','block']),
           edge_jitter: randInt(r,0,2),
@@ -406,11 +449,22 @@
           document.getElementById('api').value = DEFAULT_API;
           localStorage.setItem('hexaflock_api', DEFAULT_API);
         }
+        const f = localStorage.getItem('hexaflock_fee');
+        document.getElementById('feerate').value = f ? Number(f) : 10;
         refreshSupply();
+        // Fetch backend config to set network for explorer links
+        const api = apiUrl();
+        if(api){
+          fetch(api.replace(/\/$/, '') + '/config').then(r=>r.json()).then(cfg=>{
+            if(cfg && cfg.network){ window.__hf_network = cfg.network; }
+          }).catch(()=>{});
+        }
       })();
 
       function apiUrl(){ return (document.getElementById('api').value||'').trim(); }
       function saveApi(){ localStorage.setItem('hexaflock_api', apiUrl()); alert('Saved'); refreshSupply(); }
+      function feeRate(){ const v = Number(document.getElementById('feerate').value||0); return Math.max(1, Math.min(1000, Math.floor(v||10))); }
+      function saveFee(){ const v = feeRate(); localStorage.setItem('hexaflock_fee', String(v)); alert('Fee set to '+v+' sat/vB'); }
       async function refreshSupply(){
         const el = document.getElementById('supplyBadge');
         const api = apiUrl();
@@ -430,24 +484,16 @@
         const tx = document.getElementById('txid').value.trim();
         try{
           const pngB64 = document.getElementById('c').toDataURL('image/png').split(',')[1];
-          const res = await fetch(api.replace(/\/$/, '') + '/fee_estimate', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image_base64: pngB64})});
+          const res = await fetch(api.replace(/\/$/, '') + '/fee_estimate', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image_base64: pngB64, fee_rate_sat_vb: feeRate()})});
           const data = await res.json();
           if(data.error) throw new Error(data.error);
           document.getElementById('mintStatus').textContent = `Estimated fee: ${data.estimated_sats} sats`;
         }catch(e){ document.getElementById('mintStatus').textContent = e.message; }
       }
       async function stampNow(){
-        const api = apiUrl(); if(!api) return alert('Set backend API URL first');
-        const tx = document.getElementById('txid').value.trim();
-        try{
-          const pngB64 = document.getElementById('c').toDataURL('image/png').split(',')[1];
-          const traits = resolveTraits(tx);
-          const metadata = { source_txid: traits.source_txid, description: 'Pixel sheep variant with controlled wool and pose.', traits };
-          const res = await fetch(api.replace(/\/$/, '') + '/mint', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ image_base64: pngB64, metadata })});
-          const data = await res.json();
-          if(data.error) throw new Error(data.error);
-          document.getElementById('mintStatus').innerHTML = `Stamped TX: <a target="_blank" href="https://mempool.space/tx/${data.tx_hash}">${data.tx_hash}</a>`;
-        }catch(e){ document.getElementById('mintStatus').textContent = e.message; }
+        // Convenience: create PSBT and prompt user to sign
+        await buildPsbt();
+        document.getElementById('mintStatus').textContent = 'PSBT ready. Sign in your wallet, then paste signed TX and click Broadcast.';
       }
     </script>
   </body>

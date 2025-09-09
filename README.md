@@ -1,174 +1,125 @@
-# HexaFlock – Generative Pixel Sheep with Bitcoin Stamps Integration
+HexaFlock Stamping – Minimal Cloudflare Setup
 
-HexaFlock is an open-source generative art project that creates pixel sheep variants based on a small 24×24 reference style: orange head/body, green eyes, red snout, and a white wool “block” rendered with hex/blocky edges. It optionally mints images as Bitcoin Stamps. The repo runs locally with mock stamping by default and supports real stamping when you install `btc_stamps` and provide a funded wallet key.
+A minimal, no‑server setup to get stamping live using a Cloudflare Worker proxying a PSBT/broadcast builder (e.g., dev.bitcoinstamps).
 
-## Quick Start
+Prerequisites
+- Cloudflare account (free)
+- Node 18+
+- Wrangler CLI: `npm i -g wrangler`
 
-Fastest path (pure static, no installs):
+TL;DR
+1) Configure + deploy the Worker
+2) Point your static site to the Worker URL
+3) Use the two‑step flow: choose fee → build PSBT → sign → broadcast
 
-- Open `static_site/index.html` in a browser.
-- Paste a 64-hex Bitcoin TXID and click Generate.
-- Download PNG or copy metadata JSON. No backend required.
+1) Configure the Worker
 
-For backend/API usage (optional):
-
-Prereqs: Python 3.10+. Node 18+ optional for the React demo.
-
-1) Create a virtualenv and install Python deps
-
-```
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env
-```
-
-2) Run the backend (mock stamping by default)
+From repo root:
 
 ```
-python backend.py
-# API at http://localhost:5000
-```
-
-3) Try API generation (TXID-first)
-
-```
-curl -X POST http://localhost:5000/generate \
-  -H "Content-Type: application/json" \
-  -d '{"txid":"<64-hex-bitcoin-txid>"}'
-```
-
-4) Mint (mock) – returns a simulated tx hash and writes a PDF if ReportLab is installed
-
-```
-curl -X POST http://localhost:5000/mint \
-  -H "Content-Type: application/json" \
--d '{"image_base64":"<from /generate>","metadata":{"source_txid":"<same-txid>","seed":123,"description":"...","traits":{}}}'
-```
-
-## Real Bitcoin Stamping (optional)
-
-To stamp on testnet for real:
-
-- Clone and install `btc_stamps` into your environment (editable install recommended):
-
-```
-git clone https://github.com/stampchain-io/btc_stamps.git external/btc_stamps
-pip install -e external/btc_stamps
-```
-
-- Set your `.env`:
-
-```
-WALLET_PRIVATE_KEY=your_testnet_wif
-BITCOIN_NETWORK=testnet
-ALLOW_MOCK_STAMP=false
-```
-
-If `btc_stamps` imports cleanly, the backend will attempt to use it. Otherwise it falls back to mock (unless you’ve disabled it).
-
-## Optional IPFS
-
-If you want image bytes uploaded to an IPFS node before stamping (to keep the on-chain payload smaller):
-
-- Install `ipfshttpclient` and run a local IPFS daemon, then set in `.env`:
-
-```
-USE_IPFS=true
-IPFS_NODE=http://127.0.0.1:5001
-```
-
-If IPFS is not available, the backend logs a warning and stamps with the embedded base64 instead.
-
-## Frontend Options
-
-1) Static site (no build):
-
-- Open `static_site/index.html` in a browser (assumes backend at `http://localhost:5000`).
-
-2) React app (Vite):
-
-```
-cd frontend
-npm install
-npm run dev
-# Vite dev server at http://localhost:5173
-```
-
-Set `VITE_API_URL` if your backend isn’t on localhost:5000. The React app is optional; the static page does everything client-side.
-
-## Batch Generation
-
-```
-python batch_generate.py --num 5 --processes 2
-# Writes flocks/flock_<seed>.png and flocks/meta_<seed>.json
-```
-
-## Tests
-
-```
-pytest -q
-```
-
-Tests cover generator basics and the mock stamping service. They do not broadcast transactions.
-
-## Docker
-
-```
-docker build -t hexaflock-backend .
-docker run -p 5000:5000 --env-file .env hexaflock-backend
-```
-
-## Cloudflare Worker API (cheapest, no Docker)
-
-Use the included Worker to provide PSBT and Broadcast endpoints for the static site. Users sign in their own wallet; your creator cut (0.00021 BTC) is included as an extra output.
-
-1) Create a Worker
-
-```
-npm i -g wrangler
-wrangler login
 cd cloudflare-worker
-cp wrangler.example.toml wrangler.toml
-wrangler kv:namespace create MINTED
-# Put the returned id into wrangler.toml under [[kv_namespaces]]
+# If you prefer OAuth, use `wrangler login` instead of API token
+# Configure Wrangler with an API token (recommended non-interactive)
+export CLOUDFLARE_API_TOKEN=<your-api-token>
+
+# Verify auth
+wrangler whoami
 ```
 
-2) Configure `wrangler.toml` vars: `TX_BUILDER_URL`, `BITCOIN_NETWORK`, `CREATOR_ADDRESS`, `CREATOR_TIP_SATS=21000`, `MAX_FLOCKS=10000`.
+Create KV and wire its id:
 
-3) Deploy
+```
+# Create KV namespace for supply tracking
+wrangler kv namespace create MINTED
+# Copy the `id` it prints into wrangler.toml under [[kv_namespaces]] → binding = "MINTED"
+# Optional: initialize counter
+wrangler kv key put --binding=MINTED minted 0
+```
+
+Configure `wrangler.toml`:
+
+```
+name = "hexaflock-worker"
+account_id = "<your-account-id>"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+workers_dev = true
+
+[[kv_namespaces]]
+binding = "MINTED"
+id = "<kv-id-from-create>"
+
+[vars]
+BITCOIN_NETWORK = "testnet" # or "mainnet"
+TX_BUILDER_URL = "https://dev.bitcoinstamps.xyz"
+TX_BUILDER_PSBT_PATH = "/api/psbt"
+TX_BUILDER_BROADCAST_PATH = "/api/broadcast"
+FEE_RATE_SAT_VB = "5"
+MAX_FLOCKS = "10000"
+CREATOR_ADDRESS = "bc1q..."
+CREATOR_TIP_SATS = "21000"
+# Optional: limit CORS to your site
+# ALLOWED_ORIGIN = "https://your-site.example.com"
+```
+
+Deploy:
 
 ```
 wrangler deploy
+# Copy the URL it prints, e.g. https://hexaflock-worker.<account>.workers.dev
 ```
 
-4) In your live page, paste the Worker URL in the “Backend API URL” box. Buttons for Estimate Fee, Stamp, Build PSBT, and Broadcast will work.
+2) Wire the Static Site
 
-## Project Structure
+Open `static_site/index.html` in a browser. In the Stamp panel:
+- Backend API URL: set to your Worker URL (it defaults to workers.dev and persists)
+- You should see “Supply: X / 10,000” under the title
+
+The UI supports:
+- Fee rate: set sat/vB in the Stamp panel, persisted locally
+- Build PSBT (stamp): prepares a PSBT for your wallet and returns a session id
+- Broadcast: paste signed transaction hex to broadcast and increment supply (uses the session id to count)
+
+3) End‑to‑End Test
+
+- Health: `GET /health` → `{ ok: true, kv: true, upstream: true }`
+- Supply: `GET /supply` → `{ minted, remaining, max }`
+- PSBT: `POST /psbt` with `{ image_base64, metadata }`
+- Broadcast: `POST /broadcast` with `{ tx_hex }`
+- Mint convenience: `POST /mint` with `{ image_base64, metadata }` → returns `{ psbt }`
+
+Example curl (replace URL):
 
 ```
-.
-├── backend.py            # Flask API (generate, mint, traits, fee_estimate), CORS, logging
-├── stamps.py             # Stamping wrapper (real via btc_stamps or mock)
-├── batch_generate.py     # Batch generation + stamping
-├── style/
-│   ├── palette.json      # Frozen palette used in output
-│   └── masks.json        # Base pixel masks (head/eyes/snout/legs/wool seed)
-├── static_site/          # Simple HTML-only interface
-├── frontend/             # Vite React app
-├── tests/                # Pytests
-├── external/             # Place external repos here (btc_stamps, stamps_sdk)
-├── flocks/               # Output images + metadata
-├── logs/                 # App logs
-├── requirements.txt
-├── Dockerfile
-├── .env.example
-└── README.md
+curl https://<worker>.workers.dev/health
+curl https://<worker>.workers.dev/supply
 ```
 
-## Notes
+Notes & Limitations
+- No custodial signing. The Worker never holds keys. Users must sign PSBTs in their wallet.
+- Supply counter is best‑effort (KV is eventually consistent). For strict accounting or concurrent mints, consider a Durable Object.
+- CORS defaults to `*`. Set `ALLOWED_ORIGIN` in `wrangler.toml` to lock it to your site domain.
+- If the upstream builder schema differs, adjust `TX_BUILDER_*` paths or payload fields in `cloudflare-worker/src/index.js`.
 
-- Mock stamping returns `mock_tx_<seed>_<random>` so you can validate the flow offline.
-- If ReportLab is not installed, PDF creation is skipped with a warning.
-- The stamping wrapper attempts to call `create_stamp` or `inscribe` on `btc_stamps` if found. Adjust the method name in `stamps.py` if the external API differs.
-- Images are rendered at 24×24 using a fixed palette and saved as paletted PNG to keep size small for canonical Stamps.
+Color Derivation (Front‑end)
+- The flock shape/layout is fixed (matching your uploaded design).
+- Colors are derived deterministically from the TXID:
+  - Body color: HSL from txid[0..7]
+  - Eye color: HSL from txid[8..15]
+  - Snout color: HSL from txid[16..23]
+- See `static_site/index.html` functions `colorFromHash`, `hslToHex`, and `resolveTraits`.
+
+Production Notes
+- Network is set to mainnet in `cloudflare-worker/wrangler.toml`.
+- Default fee rate is configured via env `FEE_RATE_SAT_VB`, but the UI can override per request.
+- To harden CORS in production, set `ALLOWED_ORIGIN = "https://your-site.example.com"` under `[vars]` and redeploy.
+
+Files of Interest
+- Worker: `cloudflare-worker/src/index.js`
+- Config: `cloudflare-worker/wrangler.toml`
+- Static site: `static_site/index.html`
+
+Minimal Troubleshooting
+- OAuth port busy: `wrangler login --callback-host 127.0.0.1 --callback-port 8787`
+- Use API token: create a token with Account → Workers Scripts:Edit, Workers KV Storage:Edit, Account:Read
+- Force token for commands: `CLOUDFLARE_API_TOKEN=<token> wrangler <cmd>`

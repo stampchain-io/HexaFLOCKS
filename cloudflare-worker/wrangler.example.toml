@@ -1,10 +1,12 @@
 name = "hexaflock-worker"
+account_id = "<your-cloudflare-account-id>"
 main = "src/index.js"
 compatibility_date = "2025-01-01"
+workers_dev = true
 
 [[kv_namespaces]]
 binding = "MINTED"
-id = "<replace-with-your-kv-id>"
+id = "<your-kv-namespace-id>"
 
 [vars]
 BITCOIN_NETWORK = "testnet"
@@ -13,6 +15,6 @@ TX_BUILDER_PSBT_PATH = "/api/psbt"
 TX_BUILDER_BROADCAST_PATH = "/api/broadcast"
 FEE_RATE_SAT_VB = "5"
 MAX_FLOCKS = "10000"
-CREATOR_ADDRESS = "bc1qzzxln49x202l7m3289gs5e4q5th4tdt406w8ka"
+CREATOR_ADDRESS = "<your-bitcoin-address>"
 CREATOR_TIP_SATS = "21000"
 
