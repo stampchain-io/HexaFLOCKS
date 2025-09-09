@@ -55,6 +55,11 @@ CORS(app)
 USE_IPFS = os.getenv("USE_IPFS", "false").lower() == "true"
 BITCOIN_NETWORK = os.getenv("BITCOIN_NETWORK", "testnet")
 WALLET_PRIVATE_KEY = os.getenv("WALLET_PRIVATE_KEY")
+CREATOR_ADDRESS = os.getenv("CREATOR_ADDRESS", "bc1qzzxln49x202l7m3289gs5e4q5th4tdt406w8ka")
+CREATOR_TIP_SATS = int(float(os.getenv("CREATOR_TIP_BTC", "0.00021")) * 100_000_000)
+MAX_FLOCKS = int(os.getenv("MAX_FLOCKS", "10000"))
+TX_BUILDER_URL = os.getenv("TX_BUILDER_URL", "")
+FEE_RATE_SAT_VB = int(os.getenv("FEE_RATE_SAT_VB", "5"))
 
 stamp_service = StampService(private_key=WALLET_PRIVATE_KEY, network=BITCOIN_NETWORK)
 
@@ -284,6 +289,30 @@ def health():
     return jsonify({"ok": True})
 
 
+# Minted registry (simple JSON file) for 10k cap and duplicate prevention
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+os.makedirs(DATA_DIR, exist_ok=True)
+MINTED_PATH = os.path.join(DATA_DIR, "minted.json")
+
+
+def _load_minted() -> dict:
+    if not os.path.exists(MINTED_PATH):
+        return {"items": []}
+    try:
+        with open(MINTED_PATH, "r") as f:
+            return json.load(f)
+    except Exception:
+        return {"items": []}
+
+
+def _save_minted(reg: dict) -> None:
+    try:
+        with open(MINTED_PATH, "w") as f:
+            json.dump(reg, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed saving minted registry: {e}")
+
+
 def _txid_to_seed(txid: str) -> int:
     txid = txid.strip().lower()
     if not re.fullmatch(r"[0-9a-f]{64}", txid):
@@ -330,6 +359,14 @@ def api_mint():
         except ValueError as e:
             return jsonify({"error": str(e)}), 400
 
+        # Enforce 10k cap and prevent duplicate mints per txid
+        reg = _load_minted()
+        existing = {item.get("source_txid") for item in reg.get("items", [])}
+        if txid in existing:
+            return jsonify({"error": "This TXID has already minted a flock"}), 400
+        if len(reg.get("items", [])) >= MAX_FLOCKS:
+            return jsonify({"error": "Max supply reached"}), 400
+
         # Prepare stamp payload
         ipfs_uri = _maybe_upload_ipfs(image_b64)
         image_uri = ipfs_uri or f"data:image/png;base64,{image_b64}"
@@ -339,6 +376,10 @@ def api_mint():
             "image": image_uri,
             "image_base64": image_b64,  # some libs expect raw b64
             "attributes": {**(metadata.get("traits") or {}), "seed": metadata.get("seed"), "source_txid": txid},
+            # Creator cut (tip) for PSBT-aware builders. Libraries that support
+            # extra outputs can read these fields to add an additional output.
+            "tip_address": CREATOR_ADDRESS,
+            "tip_sats": CREATOR_TIP_SATS,
             "external_url": f"https://example.com/hexaflock/{metadata.get('seed', '0')}",
         }
 
@@ -347,6 +388,13 @@ def api_mint():
         # PDF output (best-effort)
         img_bytes = io.BytesIO(base64.b64decode(image_b64))
         create_stamped_pdf(img_bytes, metadata)
+
+        # Record mint on success
+        try:
+            reg["items"].append({"source_txid": txid, "seed": metadata.get("seed"), "tx_hash": tx_hash})
+            _save_minted(reg)
+        except Exception as e:
+            logger.warning(f"Failed to update minted registry: {e}")
 
         return jsonify({"tx_hash": tx_hash, "pdf_path": "certificate.pdf"})
     except Exception as e:
@@ -393,6 +441,61 @@ def api_fee_estimate():
     except Exception as e:
         logger.exception("/fee_estimate failed: %s", e)
         return jsonify({"error": "Internal error"}), 500
+
+
+@app.route("/psbt", methods=["POST"])  # Build PSBT via external tx-builder
+def api_psbt():
+    try:
+        if not TX_BUILDER_URL:
+            return jsonify({"error": "TX_BUILDER_URL not configured on server"}), 400
+        payload = request.get_json(force=True) or {}
+        image_b64 = payload.get("image_base64")
+        metadata = payload.get("metadata") or {}
+        txid = metadata.get("source_txid")
+        if not image_b64 or not txid:
+            return jsonify({"error": "image_base64 and metadata.source_txid required"}), 400
+
+        seed = _txid_to_seed(txid)
+        name = f"HexaFlock #{seed}"
+        # Compose request for tx-builder (endpoint may vary; adjust as needed)
+        req = {
+            "network": BITCOIN_NETWORK,
+            "fee_rate": FEE_RATE_SAT_VB,
+            "image_base64": image_b64,
+            "name": name,
+            "description": metadata.get("description", "HexaFlock"),
+            "attributes": {**(metadata.get("traits") or {}), "seed": seed, "source_txid": txid},
+            "tip_address": CREATOR_ADDRESS,
+            "tip_sats": CREATOR_TIP_SATS,
+        }
+        import requests  # available per requirements
+        url = TX_BUILDER_URL.rstrip("/") + "/api/psbt"
+        r = requests.post(url, json=req, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        return jsonify(data)
+    except Exception as e:
+        logger.exception("/psbt failed: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/broadcast", methods=["POST"])  # Broadcast signed tx via tx-builder
+def api_broadcast():
+    try:
+        if not TX_BUILDER_URL:
+            return jsonify({"error": "TX_BUILDER_URL not configured on server"}), 400
+        payload = request.get_json(force=True) or {}
+        tx_hex = payload.get("tx_hex")
+        if not tx_hex:
+            return jsonify({"error": "tx_hex required"}), 400
+        import requests
+        url = TX_BUILDER_URL.rstrip("/") + "/api/broadcast"
+        r = requests.post(url, json={"tx_hex": tx_hex, "network": BITCOIN_NETWORK}, timeout=30)
+        r.raise_for_status()
+        return jsonify(r.json())
+    except Exception as e:
+        logger.exception("/broadcast failed: %s", e)
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
