@@ -7,7 +7,9 @@ Transform any Bitcoin TXID into a beautiful, deterministic pixel sheep with uniq
 ## 🎯 Quick Start
 
 ### Option 1: Use the Live Website
-Visit [www.hexaflock.com](https://www.hexaflock.com) to start generating sheep immediately!
+Visit [GitHub Pages](https://stampchain-io.github.io/HexaFLOCKS/) to start generating sheep immediately!
+
+*(Note: www.hexaflock.com domain is not currently registered)*
 
 ### Option 2: Run Locally (No Installation Required)
 
@@ -54,7 +56,7 @@ Click "Random TX (demo)" to generate a sheep from a random TXID!
 ### URL Parameters
 Share specific sheep by adding `?txid=YOUR_TXID` to the URL:
 ```
-https://www.hexaflock.com/?txid=abcd1234...
+https://stampchain-io.github.io/HexaFLOCKS/?txid=abcd1234...
 ```
 
 ### Stamping on Bitcoin (Optional)
