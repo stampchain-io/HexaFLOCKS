@@ -1,0 +1,9 @@
+flask==3.0.0
+flask-cors==4.0.0
+pillow==10.0.1
+reportlab==4.0.7
+numpy==1.25.2
+python-dotenv==1.0.0
+ipfshttpclient==0.8.0a3
+pytest==7.4.3
+requests==2.31.0

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HexaFlock Sheep – Minimal</title>
+  <style>
+    :root {
+      --bg: #0e0e10;
+      --panel: #18181b;
+      --panel-border: #2a2a2e;
+      --text: #e5e7eb;
+      --accent: #10b981;
+      --accent-2: #f59e0b;
+      --danger: #ef4444;
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        repeating-linear-gradient(0deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 2px, transparent 4px),
+        radial-gradient(1000px 500px at 50% 0%, #111 0%, var(--bg) 60%);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      text-align: center;
+      padding: 24px;
+    }
+    .title { font-size: 28px; letter-spacing: 1px; text-shadow: 0 0 6px rgba(16,185,129,0.5); }
+    .subtitle { color: #9ca3af; margin-top: 4px; font-size: 12px; }
+    .wrap { max-width: 860px; margin: 0 auto; }
+    .card {
+      background: var(--panel);
+      border: 2px solid var(--panel-border);
+      box-shadow: inset 0 0 0 2px #000, 0 8px 0 #00000040;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px auto;
+    }
+    .row { margin: 12px 0; }
+    .inputs { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+    input[type="text"] {
+      background: #0b0b0d;
+      color: var(--text);
+      border: 2px solid var(--panel-border);
+      padding: 10px 12px;
+      border-radius: 6px;
+      width: 540px; max-width: 90vw;
+      outline: none;
+      box-shadow: inset 0 0 0 2px #000;
+    }
+    .btn {
+      background: var(--accent);
+      border: 2px solid #0f9f79;
+      color: #081c15;
+      padding: 10px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      box-shadow: inset 0 0 0 2px #000, 0 4px 0 #00000060;
+    }
+    .btn:hover { filter: brightness(1.05); }
+    .btn:active { transform: translateY(1px); box-shadow: inset 0 0 0 2px #000, 0 2px 0 #00000060; }
+    .btn-secondary { background: #3b82f6; border-color: #2b6adf; color: #05132b; }
+    .btn-danger { background: var(--danger); border-color: #c43131; color: #300; }
+    .toolbar { display:flex; gap:8px; justify-content:center; flex-wrap: wrap; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 740px){ .grid { grid-template-columns: 1fr; } }
+
+    .panel-label { font-size: 12px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.6px; }
+    .meta-list { list-style: none; padding: 0; margin: 8px 0 0; text-align: left; display: inline-block; }
+    .meta-list li { padding: 2px 0; }
+
+    .canvas-wrap { position: relative; display: inline-block; padding: 12px; background: #0b0b0d; border: 2px solid var(--panel-border); border-radius: 8px; box-shadow: inset 0 0 0 2px #000; }
+    canvas { image-rendering: pixelated; display:block; }
+    .scale { display:flex; align-items:center; gap:8px; justify-content:center; color:#9ca3af; }
+    .palette { display:flex; gap:4px; justify-content:center; margin-top:8px; }
+    .sw { width:14px; height:14px; border:1px solid #000; box-shadow: 0 1px 0 #00000080; }
+    .error { color: var(--danger); font-weight: 700; }
+    .scanlines { position: fixed; inset: 0; pointer-events: none; background: repeating-linear-gradient(0deg, rgba(0,0,0,0.12) 0px, rgba(0,0,0,0.12) 1px, rgba(0,0,0,0) 2px, rgba(0,0,0,0) 4px); opacity: 0.4; mix-blend-mode: multiply; display:none; }
+    .scanlines.on { display:block; }
+  </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="title">HexaFlock Sheep</div>
+      <div class="subtitle">Paste a Bitcoin TXID → retro pixel sheep</div>
+
+      <div class="card">
+        <div class="inputs">
+          <input id="txid" type="text" placeholder="Paste a 64-hex Bitcoin TXID" />
+          <button class="btn" onclick="generate()">Generate</button>
+          <button class="btn-secondary btn" onclick="randomTxid()">Random TX (demo)</button>
+          <button class="btn btn-danger" onclick="clearAll()">Reset</button>
+        </div>
+        <div class="row scale">
+          <span class="panel-label">Scale</span>
+          <input id="scale" type="range" min="6" max="20" value="10" oninput="applyScale()" />
+          <label><input id="crt" type="checkbox" onchange="toggleCRT()"/> CRT</label>
+          <button class="btn-secondary btn" onclick="copyLink()">Copy Link</button>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <div class="panel-label">Preview</div>
+          <div class="canvas-wrap">
+            <canvas id="c" width="24" height="24"></canvas>
+          </div>
+          <div class="palette" id="palette"></div>
+          <div class="toolbar">
+            <button class="btn" onclick="downloadPNG()">Download PNG</button>
+            <button class="btn" onclick="copyJSON()">Copy Metadata</button>
+          </div>
+        </div>
+        <div class="card">
+          <div class="panel-label">Traits</div>
+          <div id="meta" class="row"></div>
+        </div>
+      </div>
+    </div>
+    <div class="scanlines" id="scan"></div>
+
+    <script>
+      // Palette and masks (inline, minimal dependencies)
+      const PALETTE = [
+        '#000000','#FFFFFF','#F0F0F0','#D3D3D3','#FF8C00','#FFA500','#FF4500','#DC143C','#FF0000','#32CD32','#00FF00','#6B4E3D','#808080'
+      ];
+      const MASKS = {
+        grid: 24,
+        head: [[2,10],[3,10],[4,10],[5,10],[2,11],[3,11],[4,11],[5,11],[2,12],[3,12],[4,12],[5,12],[2,13],[3,13],[4,13]],
+        eyes: { left:[3,11], right:[5,11] },
+        snout: [6,12], legs: [[9,16],[14,16]],
+        wool_seeds: [[8,10],[9,10],[10,10],[11,10],[12,10],[8,11],[9,11],[10,11],[11,11],[12,11],[13,11],[8,12],[9,12],[10,12],[11,12],[12,12],[13,12],[14,12],[9,13],[10,13],[11,13],[12,13],[13,13],[10,14],[11,14],[12,14]]
+      };
+
+      // TXID -> seed (match backend logic)
+      function txidToSeed(txid){
+        txid = (txid||'').trim().toLowerCase();
+        if(!/^[0-9a-f]{64}$/.test(txid)) throw new Error('Invalid TXID format');
+        const parts = [0,1,2,3].map(i=>parseInt(txid.slice(i*16,(i+1)*16),16));
+        const mixed = parts[0]^parts[1]^parts[2]^parts[3];
+        const seed = mixed % 2147483647; return seed||1;
+      }
+
+      // Mulberry32 PRNG
+      function mulberry32(a){return function(){let t=a+=0x6D2B79F5;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296;}}
+      function randInt(r,min,max){return Math.floor(r()*(max-min+1))+min}
+      function pick(r,arr){return arr[Math.floor(r()*arr.length)]}
+      function pickWeighted(r,items,weights){const s=weights.reduce((a,b)=>a+b,0);let x=r()*s;for(let i=0;i<items.length;i++){if((x-=weights[i])<0)return items[i]}return items[items.length-1]}
+
+      function resolveTraits(txid){
+        const seed = txidToSeed(txid); const r=mulberry32(seed);
+        return {
+          source_txid: txid,
+          body_color: pick(r,['#FF8C00','#FFA500','#FF4500']),
+          eye_color: pick(r,['#00FF00','#32CD32']),
+          snout_color: pickWeighted(r,['#FF0000','#DC143C','#FFD700'],[89,10,1]),
+          wool_density: randInt(r,3,7),
+          wool_shape: pick(r,['hex','block']),
+          edge_jitter: randInt(r,0,2),
+          ear_tilt: pick(r,['up','neutral','down']),
+          leg_pose: pick(r,['static','step1','step2']),
+          accessory: pickWeighted(r,['none','scarf','bell','hat'],[92,4,3,1])
+        };
+      }
+
+      function drawSheep(traits){
+        const g = MASKS.grid;
+        const cvs = document.getElementById('c');
+        const ctx = cvs.getContext('2d');
+        // Disable smoothing when later scaled via CSS
+        ctx.imageSmoothingEnabled = false;
+        // Clear
+        ctx.clearRect(0,0,g,g);
+        // Background black
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0,0,g,g);
+        // Helper to set pixel
+        function p(x,y,color){ctx.fillStyle=color;ctx.fillRect(x,y,1,1)}
+
+        // Head
+        MASKS.head.forEach(([x,y])=>p(x,y,traits.body_color));
+
+        // Eyes
+        const [lx,ly]=MASKS.eyes.left; const [rx,ry]=MASKS.eyes.right;
+        p(lx,ly,traits.eye_color); p(rx,ry,traits.eye_color);
+
+        // Snout
+        const [sx,sy]=MASKS.snout; p(sx,sy,traits.snout_color);
+
+        // Legs
+        MASKS.legs.forEach(([x,y],i)=>{
+          let dx=0; if(traits.leg_pose==='step1'&&i===0)dx=-1; else if(traits.leg_pose==='step2'&&i===1)dx=1;
+          const nx=Math.max(0,Math.min(g-1,x+dx)); p(nx,y,'#6B4E3D');
+        });
+
+        // Wool growth
+        const r = mulberry32(txidToSeed(traits.source_txid));
+        const neighHex=[[1,0],[0,1],[-1,1],[-1,0],[0,-1],[1,-1]];
+        const neighBlock=[[1,0],[-1,0],[0,1],[0,-1]];
+        const neigh = traits.wool_shape==='hex'?neighHex:neighBlock;
+        const headSet = new Set(MASKS.head.map(([x,y])=>`${x},${y}`));
+        let wool = new Set(MASKS.wool_seeds.map(([x,y])=>`${x},${y}`));
+        for(let i=0;i<traits.wool_density;i++){
+          const add = new Set();
+          wool.forEach(key=>{
+            const [x,y]=key.split(',').map(Number);
+            neigh.forEach(([dx,dy])=>{
+              const jx = dx + randInt(r,-traits.edge_jitter,traits.edge_jitter);
+              const jy = dy + randInt(r,-traits.edge_jitter,traits.edge_jitter);
+              const nx=x+jx, ny=y+jy;
+              if(nx>=0&&nx<g&&ny>=8&&ny<g-4){
+                const k=`${nx},${ny}`; if(!wool.has(k)&&!headSet.has(k)) add.add(k);
+              }
+            })
+          });
+          add.forEach(k=>wool.add(k));
+        }
+        wool.forEach(k=>{const [x,y]=k.split(',').map(Number); p(x,y,'#FFFFFF')});
+
+        // Accessories
+        if(traits.accessory==='scarf'){
+          for(let x=4;x<10;x++) p(x,14,'#FF0000');
+        } else if(traits.accessory==='bell'){
+          p(6,14,'#FFD700');
+        } else if(traits.accessory==='hat'){
+          for(let x=2;x<6;x++) p(x,9,'#000000');
+        }
+
+        applyScale();
+      }
+
+      function generate(){
+        const tx = document.getElementById('txid').value.trim();
+        try{
+          const traits = resolveTraits(tx);
+          drawSheep(traits);
+          const metaDiv = document.getElementById('meta');
+          const items = Object.entries(traits).map(([k,v])=>`<li><strong>${k}</strong>: ${v}</li>`).join('');
+          metaDiv.innerHTML = `<ul>${items}</ul>`;
+        }catch(e){
+          document.getElementById('meta').innerHTML = `<p class="error">${e.message}</p>`;
+        }
+      }
+
+      function applyScale(){
+        const s = parseInt(document.getElementById('scale').value,10);
+        const cvs = document.getElementById('c');
+        const px = 24 * s;
+        cvs.style.width = px+'px';
+        cvs.style.height = px+'px';
+      }
+
+      function randomTxid(){
+        const hex = '0123456789abcdef';
+        let s=''; for(let i=0;i<64;i++) s += hex[Math.floor(Math.random()*16)];
+        document.getElementById('txid').value = s;
+        generate();
+      }
+
+      function clearAll(){
+        document.getElementById('txid').value='';
+        document.getElementById('meta').innerHTML='';
+        const ctx = document.getElementById('c').getContext('2d');
+        ctx.clearRect(0,0,24,24);
+      }
+
+      function downloadPNG(){
+        const link = document.createElement('a');
+        link.download = 'hexaflock_sheep.png';
+        link.href = document.getElementById('c').toDataURL('image/png');
+        link.click();
+      }
+
+      function copyJSON(){
+        const tx = document.getElementById('txid').value.trim();
+        try{
+          const traits = resolveTraits(tx);
+          const data = {
+            source_txid: traits.source_txid,
+            description: 'Pixel sheep variant with controlled wool and pose.',
+            traits
+          };
+          navigator.clipboard.writeText(JSON.stringify(data)).then(()=>{
+            alert('Metadata JSON copied');
+          });
+        }catch(e){
+          alert('Invalid TXID');
+        }
+      }
+
+      function copyLink(){
+        const tx = document.getElementById('txid').value.trim();
+        if(!tx) return alert('Enter a TXID first');
+        const url = new URL(window.location.href);
+        url.searchParams.set('txid', tx);
+        navigator.clipboard.writeText(url.toString());
+        alert('Permalink copied');
+      }
+
+      function toggleCRT(){
+        const on = document.getElementById('crt').checked;
+        document.getElementById('scan').classList.toggle('on', on);
+      }
+
+      // Palette preview
+      (function initPalette(){
+        const p = document.getElementById('palette');
+        p.innerHTML = PALETTE.map(c=>`<span class="sw" style="background:${c}"></span>`).join('');
+      })();
+
+      // Support ?txid=...
+      (function initFromQuery(){
+        const params = new URLSearchParams(window.location.search);
+        const q = params.get('txid');
+        if(q){ document.getElementById('txid').value = q; generate(); }
+      })();
+    </script>
+  </body>
+  </html>
