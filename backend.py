@@ -443,6 +443,18 @@ def api_fee_estimate():
         return jsonify({"error": "Internal error"}), 500
 
 
+@app.route("/supply", methods=["GET"])  # Minted/remaining out of MAX_FLOCKS
+def api_supply():
+    try:
+        reg = _load_minted()
+        minted = len(reg.get("items", []))
+        remaining = MAX_FLOCKS - minted if MAX_FLOCKS > minted else 0
+        return jsonify({"minted": minted, "remaining": remaining, "max": MAX_FLOCKS})
+    except Exception as e:
+        logger.exception("/supply failed: %s", e)
+        return jsonify({"error": "Internal error"}), 500
+
+
 @app.route("/psbt", methods=["POST"])  # Build PSBT via external tx-builder
 def api_psbt():
     try:

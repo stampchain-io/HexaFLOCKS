@@ -91,6 +91,7 @@
     <div class="wrap">
       <div class="title">HexaFlock Sheep</div>
       <div class="subtitle">Paste a Bitcoin TXID → retro pixel sheep</div>
+      <div class="subtitle" id="supplyBadge">Supply: —</div>
 
       <div class="card">
         <div class="inputs">
@@ -248,8 +249,8 @@
         const woolSet = new Set(base);
         base.forEach(k=>{
           const [x,y]=k.split(',').map(Number);
-          if(x>12 && Math.random()<0.12){
-            const nx=x+(Math.random()<0.5?1:-1), ny=y+(Math.random()<0.5?1:-1);
+          if(x>12 && r()<0.12){
+            const nx=x+(r()<0.5?1:-1), ny=y+(r()<0.5?1:-1);
             if(nx>=0&&nx<g&&ny>=0&&ny<g) woolSet.add(`${nx},${ny}`);
           }
         });
@@ -363,9 +364,25 @@
         if(q){ document.getElementById('txid').value = q; generate(); }
         const a = localStorage.getItem('hexaflock_api');
         if(a) document.getElementById('api').value = a;
+        refreshSupply();
       })();
+      function saveApi(){ localStorage.setItem('hexaflock_api', apiUrl()); alert('Saved'); refreshSupply(); }
       function apiUrl(){ return (document.getElementById('api').value||'').trim(); }
       function saveApi(){ localStorage.setItem('hexaflock_api', apiUrl()); alert('Saved'); }
+      async function refreshSupply(){
+        const el = document.getElementById('supplyBadge');
+        const api = apiUrl();
+        if(!api){ el.textContent = 'Supply: —'; return; }
+        try{
+          const r = await fetch(api.replace(/\/$/, '') + '/supply');
+          const d = await r.json();
+          if(d && typeof d.minted === 'number' && typeof d.max === 'number'){
+            el.textContent = `Supply: ${d.minted} / ${d.max}`;
+          } else {
+            el.textContent = 'Supply: —';
+          }
+        }catch{ el.textContent = 'Supply: —'; }
+      }
       async function estimateFee(){
         const api = apiUrl(); if(!api) return alert('Set backend API URL first');
         const tx = document.getElementById('txid').value.trim();

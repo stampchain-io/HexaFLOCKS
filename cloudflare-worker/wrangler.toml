@@ -1,0 +1,18 @@
+name = "hexaflock-worker"
+account_id = "dcde0fefc3f48090702893970a1b9145"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+[[kv_namespaces]]
+binding = "MINTED"
+id = "42b096443abd4238a2d6a2b6f3f8ac18"
+
+[vars]
+BITCOIN_NETWORK = "testnet"
+TX_BUILDER_URL = "https://dev.bitcoinstamps.xyz"
+TX_BUILDER_PSBT_PATH = "/api/psbt"
+TX_BUILDER_BROADCAST_PATH = "/api/broadcast"
+FEE_RATE_SAT_VB = "5"
+MAX_FLOCKS = "10000"
+CREATOR_ADDRESS = "bc1qzzxln49x202l7m3289gs5e4q5th4tdt406w8ka"
+CREATOR_TIP_SATS = "21000"

@@ -119,6 +119,31 @@ docker build -t hexaflock-backend .
 docker run -p 5000:5000 --env-file .env hexaflock-backend
 ```
 
+## Cloudflare Worker API (cheapest, no Docker)
+
+Use the included Worker to provide PSBT and Broadcast endpoints for the static site. Users sign in their own wallet; your creator cut (0.00021 BTC) is included as an extra output.
+
+1) Create a Worker
+
+```
+npm i -g wrangler
+wrangler login
+cd cloudflare-worker
+cp wrangler.example.toml wrangler.toml
+wrangler kv:namespace create MINTED
+# Put the returned id into wrangler.toml under [[kv_namespaces]]
+```
+
+2) Configure `wrangler.toml` vars: `TX_BUILDER_URL`, `BITCOIN_NETWORK`, `CREATOR_ADDRESS`, `CREATOR_TIP_SATS=21000`, `MAX_FLOCKS=10000`.
+
+3) Deploy
+
+```
+wrangler deploy
+```
+
+4) In your live page, paste the Worker URL in the “Backend API URL” box. Buttons for Estimate Fee, Stamp, Build PSBT, and Broadcast will work.
+
 ## Project Structure
 
 ```

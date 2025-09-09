@@ -1,18 +1,17 @@
 {
   "palette": [
-    "#000000",  // black (background/outline)
-    "#FFFFFF",  // white (wool)
-    "#F0F0F0",  // light wool
-    "#D3D3D3",  // gray wool shading
-    "#FF8C00",  // orange (body base)
-    "#FFA500",  // orange alt
-    "#FF4500",  // deep orange
-    "#DC143C",  // crimson (snout alt)
-    "#FF0000",  // red (snout)
-    "#32CD32",  // limegreen (eye alt)
-    "#00FF00",  // green (eyes)
-    "#6B4E3D",  // brown (legs)
-    "#808080"   // outline alt
+    "#000000",
+    "#FFFFFF",
+    "#F0F0F0",
+    "#D3D3D3",
+    "#FF8C00",
+    "#FFA500",
+    "#FF4500",
+    "#DC143C",
+    "#FF0000",
+    "#32CD32",
+    "#00FF00",
+    "#6B4E3D",
+    "#808080"
   ]
 }
-
